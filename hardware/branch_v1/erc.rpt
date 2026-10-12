@@ -1,9 +1,12 @@
-ERC report (2026-10-12T11:14:17, Encoding UTF8)
+ERC report (2026-10-12T11:41:09, Encoding UTF8)
 Report includes: Errors, Warnings, Exclusions
 
 ***** Sheet /
+[footprint_link_issues]: The current configuration does not include the footprint library 'cube'
+    ; warning
+    @(259.08 mm, 513.08 mm): Symbol U30 [TPS259474LRPWR_10__27248]
 
- ** ERC messages: 0  Errors 0  Warnings 0
+ ** ERC messages: 1  Errors 0  Warnings 1
 
  ** Ignored checks:
     - Global label only appears once in the schematic

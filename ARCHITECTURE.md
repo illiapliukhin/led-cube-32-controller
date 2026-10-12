@@ -8,7 +8,7 @@
 - **Трюк:** ESP32-S3 LCD_CAM выдаёт 16-битную параллельную шину + общий CLK. HD108 сдвигает данные только по фронтам CLK, поэтому ветвь выбирается **гейтированием CLK** (компаратор адреса 74HC688 + 74AHC1G32 на ветви). Одна DMA-передача = 16 нитей одновременно.
 - **1 м³:** 32³ = 32 768 RGB, шаг 31,25 мм, **~96 fps** с одной главной платой, 16 бит цвета, 27 кГц ШИМ. Премиум: 48³ (20,8 мм, 110 592 LED, 3 главные платы, ~65 fps).
 - **2 м³:** 64³ = 262 144 RGB, шаг 31,25 мм, 4 главные платы с синхронизацией кадра (SYNC), ~49 fps. 96³/128³ — только как исследовательский вариант (стоимость/мощность/вес).
-- **Мощность (32³):** абсолютный максимум белого 1966 А при 5 В (9,8 кВт) — нереально и не нужно. Ограничитель яркости (ABL) 25 % → ≤ 492 А, типичная сцена 3D-объекта (APL ≈ 15 %) ≈ 295 А / 1,5 кВт. Питание: **9× Mean Well LRS-350-5 (60 А)**, по 1 БП на ~7 ветвей, инжекция на каждой ветви (2 клеммы), нити 4-жильные 22 AWG (1 м) / 20 AWG (2 м).
+- **Мощность (32³):** абсолютный максимум белого 1966 А при 5 В (9,8 кВт) — нереально и не нужно. Ограничитель яркости (ABL) 25 % → ≤ 2,46 кВт, типичная сцена 3D-объекта (APL ≈ 15 %) ≈ 1,5 кВт. **Распределение поднято до 12 В** (v1.1): 5× Mean Well LRS-600-12 (50 А) → шина 12 В → на каждой ветви eFuse TPS259474L (защита от переполюсовки, лимит 4,46 А) + синхронный buck TPS56C215 12 В→5 В 12 А (локальная инжекция). Ток по кабелю ветви 3,5 А вместо 7,7 А (в 2,2 раза меньше), падение на 2 м кабеля 1 мм² 0,24 В вместо 0,53 В, и оно не влияет на 5 В пикселей. Каждая нить через PTC 2 А + ESD (USBLC6-2SC6) на разъёме.
 - **Стоимость LED (32³):** ≈ $5,9–11,5 тыс. (HD108/SK9822 нити $0,18–0,35/пиксель); электроника ≈ $400–600; БП ≈ $350.
 - **Вес (32³):** ≈ 60 кг висящей массы → верхняя рама из профиля 4040, нити с грузиками/нижней сеткой-растяжкой.
 
@@ -51,33 +51,46 @@ Market references (prices are indicative, Oct 2026):
 - Flicker: none (HD108 internal 27 kHz PWM, independent of fps). Colour: 16-bit + 5-bit per-channel current gain → gamma 2.4 without banding.
 - Multi-board (2 m³): each main board drives ≤ 64 branches. A shared SYNC line (opto/RS-485 pair on a spare port pin) latches all boards' frame start; content is distributed over Wi-Fi/Ethernet (W5500 option) as voxel slabs.
 
-## 4. Power distribution (32³)
-- Firmware ABL: total current ≤ 25 % of max = 492 A (2.46 kW). Typical 3D-object scenes (APL 10–15 %) draw 200–300 A.
-- 9× LRS-350-5 (60 A each, ~$35): each PSU feeds 7–8 branch boards via 2× 14 AWG pairs. Each branch board takes ≤ 7.7 A at ABL on 2 terminal blocks. The main board is powered separately (5 V/2 A plus USB).
-- Strand: 32 nodes, 1 m, 4-core 22 AWG. At ABL, 0.48 A → 0.03 V drop. Full white without ABL would be 1.92 A → 0.10 V.
-- Protection: one 10 A blade fuse per branch-board feed; 60 A per PSU output bus; PSU OVP built in.
-- Heat: ≤ 2.5 kW (ABL) spread over 1 m³ of thin strands, which free air convection handles. PSUs go in a separate ventilated rack.
+## 4. Power distribution (32³), v1.1: 12 V bus with local buck per branch
+Why 12 V: the HD108 runs at 5 V. Distributing 5 V across 1 m³ means 492 A (ABL) through long cables, and the drop lands on the pixels. A 12 V bus with point-of-load bucks keeps the cables thin and the pixel rail regulated.
+
+| Bus | Total @ABL 25 % | Per branch (64) | Drop, 2 m of 1.0 mm² pair | Comment |
+|---|---|---|---|---|
+| 5 V direct | 492 A | 7.68 A | 0.53 V (10.6 %!) | v1 plan; drop shows on the pixels |
+| **12 V + local buck (chosen)** | 223 A | 3.48 A | 0.24 V (2 %, absorbed by buck) | TPS56C215 (VIN ≤ 17 V) |
+| 24 V + local buck | 111 A | 1.74 A | 0.12 V | needs a 36–60 V buck (e.g. LM5145 controller + FETs); kept as option for 2 m³ |
+
+WS2815 (12 V pixels) was rejected. It is single-wire 800 kHz with 8-bit colour and 2 kHz PWM, which breaks the 16-bit, flicker-free, high-fps goal. The 12 V gain is better had from a local buck.
+
+- PSUs: 5× Mean Well **LRS-600-12** (12 V/50 A) for 32³ at ABL. Each PSU feeds ~13 branch boards through a daisy-chained 12 V bus (2× terminal per branch, in/out, 1.5 mm² trunk, 1.0 mm² drops). Main board takes 12 V from the same bus (≤ 0.4 A).
+- **Branch board power chain** (schematic `hardware/branch_v1`): J30/J31 12 V → SMBJ15A TVS (C83846) → **TPS259474LRPWR eFuse** (C2864845: reverse-polarity, OV/UV lockout (9.2 V / 15.8 V dividers), current limit R_ILM = 750 Ω → 4.46 A, dV/dt soft-start 10 nF) → **TPS56C215RNNR** (C473372) 12 A sync buck, 800 kHz FCCM (MODE 120k/20k), V_OUT = 0.6·(1+75k/10k) = 5.1 V, L = 1.5 µH/20 A YSPI1365-1R5M (C5158939), 6× 47 µF 1210 out, 4× 10 µF/50 V in → +5V → **per-strand PTC 2 A hold (C20812)** → JST XH-4.
+  - Buck sizing: 512 px × 60 mA × ABL 0.25 = 7.7 A (64 % of 12 A). Firmware ABL is the primary limiter; the eFuse is the hard backstop (4.46 A × 12 V ≈ 49 W in).
+  - Ripple: ΔI_L = (12−5.1)·5.1/(12·0.8 MHz·1.5 µH) = 2.4 A p-p (31 % of 7.7 A).
+- Strand: 32 nodes, 1 m, 4-core 22 AWG. At ABL, 0.48 A → 0.03 V drop. A local full-white burst of 1.92 A is still under the 2 A PTC hold.
+- **Main board power** (`hardware/main_v1`): 12 V terminal → PTC 2 A (C20812) → SS34 series reverse-polarity diode (C8678) → SMBJ15A TVS → AP63203WU-7 3.3 V/2 A buck (C780769, 3.8–32 V in). USB-C VBUS joins through an SS34 OR diode, with USBLC6-2SC6 ESD on D+/D−/VBUS. Buck instead of the v1 AMS1117: 24× LVC245 driving ribbons ≈ 0.85 A at 3.3 V, and an LDO from 5 V would burn 2 W.
+- Heat: ≤ 2.5 kW (ABL) is spread over 1 m³ of thin strands, so free convection handles it. Per-branch buck loss ≈ 3 W (92 %), spread over a 495 mm strip. PSUs sit in a ventilated rack.
 
 ## 5. Boards
-**Main board v1** (`hardware/main_v1`, 300×130 mm, 2-layer):
-- ESP32-S3-WROOM-1-N16R8 (C2913202), USB-C (C165948) for programming, AMS1117-3.3 (C6186), SS34 OR-ing (C8678), 5 V terminal (C8465).
-- 24× 74LVC245APW (C6082) line drivers, 3 per port: D0–7, D8–15, CLK+A0–A5.
-- 8× IDC 2×20 box headers (C9138), with buffer OE gated by firmware (OE_N pulled up).
-- Port pinout: odd 1–31 = D0..D15, 33 = CLK, 35/37/39 = A0–A2, 4/8/12 = A3–A5, all other pins GND.
+**Main board v1.1** (`hardware/main_v1`, 300×130 mm, 2-layer 1.6 mm FR-4, 1 oz; **DRC 0 errors / 0 unconnected, ERC 0**):
+- ESP32-S3-WROOM-1-N16R8 (C2913202), USB-C (C165948) + USBLC6-2SC6 ESD, 12 V input chain (see §4), AP63203 buck 3.3 V.
+- 24× 74LVC245APW (C6082) line drivers, 3 per port: D0–7, D8–15, CLK+A0–A5. Each has its own 100 nF at the VCC pin.
+- 8× IDC 2×20 box headers (C9138). Buffer OE_N is pulled up (outputs Hi-Z at boot).
+- **Port pinout (v1.1):** odd 1–31 = D0..D15, 33 = CLK, 35/37/39 = A0–A2, **34/36/38 = A3–A5**, all other pins GND. Branch schematic was updated to match.
+- Layout: 23 bus lines run as a B.Cu "spine" (1.0 mm pitch) between the two port rows. Each buffer drops straight to its line with a via, and the outputs fan out to the header in a non-crossing staircase. Every corner is an arc fillet. Details: `docs/LAYOUT_LESSONS.md`.
 
 **Branch board v1** (`hardware/branch_v1`, schematic; proposed 495×30 mm strip lying on the top frame, strands hang at 31.25 mm pitch):
 - 3× 74AHCT245 (C173388) regenerate the bus to the OUT port (daisy chain).
 - 74HC688 (C88042) address compare against 6 solder-jumper ID bits; 74AHC1G32 (C7470) clock gate.
 - 2× 74AHCT245 data drivers + 2× 74AHCT245 clock fan-out, each output through 33 Ω (C23140).
 - 16× JST XH 4-pin strand plugs (C144395): +5V, DATA, CLK, GND.
-- 2× injection terminals, plus bulk and decoupling caps.
+- 12 V in/out terminals, TVS, eFuse, 12 A buck, PTC + ESD per strand (§4).
 
 ## 6. Cables & connectors
 | Link | Part | Notes |
 |---|---|---|
 | Main → branch chain | 40-way 1.27 mm flat ribbon, IDC 2×20 sockets | ≤ 1 m per hop, every 2nd conductor GND (except A3–A5 pairs) |
 | Strand | 4-core 22 AWG (1 m) / 20 AWG (2 m), JST XH-4 plug at the top | data/clock twisted with GND if custom |
-| Power | 14 AWG pairs PSU → branch, 10 A fuse | |
+| Power | 12 V trunk 1.5 mm² (16 AWG) daisy-chain, 1.0 mm² (18 AWG) drops; 5 A blade fuse per drop; eFuse on board | 3.5 A per branch at ABL |
 
 ## 7. Risks
 | Risk | Sev | Mitigation |

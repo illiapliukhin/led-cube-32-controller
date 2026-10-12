@@ -41,15 +41,37 @@ class Router:
                 if c==-3: sub[m]=-2
                 else:
                     v=sub[m]; sub[m]=np.where((v==-1)|(v==c),c,-2)
+    def _geo(s,net,item,layers):
+        if net is None: return
+        if not hasattr(s,'geom'): s.geom={}
+        s.geom.setdefault(net,[]).append((item,tuple(layers)))
+    def nearest(s,net,x,y,layer):
+        best=None
+        for it,ls in getattr(s,'geom',{}).get(net,[]):
+            if layer not in ls: continue
+            if it[0]=='seg':
+                (ax,ay),(bx,by),hw=it[1],it[2],it[3]; dx,dy=bx-ax,by-ay; L2=dx*dx+dy*dy or 1e-12
+                t=max(0,min(1,((x-ax)*dx+(y-ay)*dy)/L2)); px,py=ax+t*dx,ay+t*dy
+            elif it[0]=='circ': px,py=it[1],it[2]
+            else:
+                xa,ya,xb,yb=it[1:]; px=min(max(x,xa),xb); py=min(max(y,ya),yb)
+                # move to rect centre line to guarantee overlap
+                cx_,cy_=(xa+xb)/2,(ya+yb)/2; px=px+0.5*(cx_-px); py=py+0.5*(cy_-py)
+            d=(px-x)**2+(py-y)**2
+            if best is None or d<best[0]: best=(d,(px,py))
+        return best
     def block_seg(s,layers,a,b,hw,net):
+        s._geo(net,('seg',a,b,hw),layers)
         ax,ay=a; bx,by=b; dx,dy=bx-ax,by-ay; L2=dx*dx+dy*dy or 1e-12
         def fn(X,Y,r):
             t=np.clip(((X-ax)*dx+(Y-ay)*dy)/L2,0,1); px=ax+t*dx-X; py=ay+t*dy-Y
             return px*px+py*py<=(r+hw)**2
         s.block_shape(layers,fn,(min(ax,bx)-hw,min(ay,by)-hw,max(ax,bx)+hw,max(ay,by)+hw),net)
     def block_circle(s,layers,x,y,rad,net):
+        s._geo(net,('circ',x,y,rad),layers)
         s.block_shape(layers,lambda X,Y,r:(X-x)**2+(Y-y)**2<=(r+rad)**2,(x-rad,y-rad,x+rad,y+rad),net)
     def block_rect(s,layers,xa,ya,xb,yb,net):
+        s._geo(net,('rect',xa,ya,xb,yb),layers)
         def fn(X,Y,r):
             dx=np.maximum(np.maximum(xa-X,X-xb),0); dy=np.maximum(np.maximum(ya-Y,Y-yb),0); return dx*dx+dy*dy<=r*r
         s.block_shape(layers,fn,(xa,ya,xb,yb),net)
@@ -165,5 +187,9 @@ class Router:
         if dst:
             ep=segs[-1][1][-1]; cand=min(dst,key=lambda p:(p[0]-ep[0])**2+(p[1]-ep[1])**2)
             if (cand[0]-ep[0])**2+(cand[1]-ep[1])**2<0.25: last=cand[:2]
+        elif to_net:
+            ep=segs[-1][1][-1]; lay=segs[-1][0]
+            nb=s.nearest(net,ep[0],ep[1],lay)
+            if nb and nb[0]<1.0 and nb[0]>1e-6: last=nb[1]
         s.commit(net,res,w,first,last)
         return True
