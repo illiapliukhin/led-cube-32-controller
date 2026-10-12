@@ -26,11 +26,11 @@ for n,x,y0,y1 in ((1,-0.725,-1.2,-0.7),(10,0.725,-1.2,-0.7),(4,-0.725,0.7,1.2),(
     P.append(pad(n,x,(y0+y1)/2,0.25,abs(y1-y0)))
 P.append(pad(5,-0.25,0.1,0.3,2.2)); P.append(pad(6,0.25,0.1,0.3,2.2))
 silk='  (fp_line (start -1.1 -1.35) (end -0.6 -1.35) (stroke (width 0.12) (type solid)) (layer "F.SilkS"))\n  (fp_circle (center -1.35 -1.0) (end -1.25 -1.0) (stroke (width 0.12) (type solid)) (fill solid) (layer "F.SilkS"))\n'
-fp('TI_RPW0010A_VQFN-HR-10_2x2mm_P0.45mm','TI RPW0010A VQFN-HR 2x2 mm (TPS25947), land pattern per TI 4225183/A',P,(2.0,2.0),(2.9,2.9),'${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/Texas_RPU0010A_VQFN-HR-10_2x2mm_P0.5mm.step',silk)
+fp('TI_RPW0010A_VQFN-HR-10_2x2mm_P0.45mm','TI RPW0010A VQFN-HR 2x2 mm (TPS25947), land pattern per TI 4225183/A',P,(2.0,2.0),(2.9,2.9),'${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/Texas_DSQ0010A_WSON-10-1EP_2x2mm_P0.4mm_EP0.9x1.5mm.step',silk)
 # YJYCOIN YSPI1365: F=14.5 total, G=5.0 pad height, H=6.5 gap -> pad 4.0 x 5.0 at +-5.25
 fp('L_YJYCOIN_YSPI1365','YJYCOIN YSPI1365 13.8x12.6 mm molded inductor, land per datasheet (F14.5 G5.0 H6.5)',
-   [pad(1,-5.25,0,4.0,5.0),pad(2,5.25,0,4.0,5.0)],(13.8,12.6),(15.0,13.2),'${KICAD10_3DMODEL_DIR}/Inductor_SMD.3dshapes/L_TaiTech_TMPC1265_13.5x12.5mm.step')
+   [pad(1,-5.25,0,4.0,5.0),pad(2,5.25,0,4.0,5.0)],(13.8,12.6),(15.0,13.2),'${KICAD10_3DMODEL_DIR}/Inductor_SMD.3dshapes/L_Changjiang_FXL1365.step')
 # Cjiang FXL0630: a=3.7 gap, b=8.4 total, c=3.5 pad height -> pad 2.35 x 3.5 at +-3.025
 fp('L_Cjiang_FXL0630','Cjiang FXL0630 7.0x6.6 mm molded inductor, land per datasheet (a3.7 b8.4 c3.5)',
-   [pad(1,-3.025,0,2.35,3.5),pad(2,3.025,0,2.35,3.5)],(7.0,6.6),(9.0,7.2),'${KICAD10_3DMODEL_DIR}/Inductor_SMD.3dshapes/L_Bourns_SRP7028A_7.3x6.6mm.step')
+   [pad(1,-3.025,0,2.35,3.5),pad(2,3.025,0,2.35,3.5)],(7.0,6.6),(9.0,7.2),'${KICAD10_3DMODEL_DIR}/Inductor_SMD.3dshapes/L_Changjiang_FXL0630.step')
 print('ok')

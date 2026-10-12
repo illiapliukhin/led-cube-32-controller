@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Branch board v1 PCB generator. SOURCE OF TRUTH = branch_v1.kicad_sch: every footprint, value, LCSC field and
 pad net is read from the schematic netlist; this script only places and routes.
-250 x 100 mm, 2-layer: logic top-left, 16 strand columns along the bottom (13 mm pitch), 12 V power stage on the right.
+250 x 100 mm, 2-layer: logic top-left, 16 strand columns along the bottom (13.5 mm pitch), 12 V power stage on the right.
 Run: ../../kpy.sh $PWD/branch_gen.py"""
 import sys, os, math, json, time
 HERE=os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0,os.path.join(HERE,'../../tools'))
@@ -48,7 +48,7 @@ for i,u in enumerate(['U1','U2','U3','U4','U5','U6','U7','U8','U9']):
     ux,uy=FP[u].GetPosition().x/MM,FP[u].GetPosition().y/MM
     off={'U4':(0,-8.6),'U5':(0,-3.0)}.get(u,(5.6,0))
     place('C%d'%(i+1),ux+off[0],uy+off[1],0)
-XC=[12+13*i for i in range(16)]
+XC=[12+13.5*i for i in range(16)]
 def SOT_ori(ref,x,y):
     for rot in (0,90,180,270):
         f=place(ref,x,y,rot); p1=P2(ref,1); p4=P2(ref,4); p6=P2(ref,6)
@@ -72,7 +72,7 @@ place('C36',231.3,28,0); place('C37',237.6,27.2,0); place('C38',241.5,27.5,90)
 place('R35',244,24.5,0); place('R36',244,26.5,0); place('R37',246.8,29.5,90); place('R38',248.8,29.5,90); place('R39',244,34,90)
 place('L30',235,43,0)
 for k,y in zip(range(40,46),(50,53.5,57,60.5,64,67.5)): place('C%d'%k,244,y,0)
-for i,(x,y) in enumerate([(4,4),(W-4,4),(4,H-4),(W-4,H-4)]):
+for i,(x,y) in enumerate([(4,40),(W-4,80),(4,H-4),(W-4,H-4)]):
     h=bd.fp('MountingHole','MountingHole_3.2mm_M3','H%d'%(i+1),'M3',x,y); h.SetBoardOnly(True); h.SetExcludedFromBOM(True); h.SetExcludedFromPosFiles(True)
 for i,(x,y) in enumerate([(118,3),(4,60),(220,96.5)]):
     h=bd.fp('Fiducial','Fiducial_1mm_Mask2mm','FID%d'%(i+1),'FID',x,y); h.SetBoardOnly(True); h.SetExcludedFromBOM(True)
@@ -94,8 +94,9 @@ def fan(u,cols,layer,y0,via_first=False):
         for i,(bx,by,tx,net) in enumerate(grp):
             rank=n-1-i; yl=y0+0.6*rank
             if via_first:
-                path([(bx,by),(bx,by+1.2)],net); bd.via(bx,by+1.2,net,VD,VDR)
-                path([(bx,by+1.2),(bx,yl),(tx,yl)],net,0.2,layer)
+                vy=by+(1.2 if (18-[t[3] for t in items].index(net))%2==0 else 2.3)
+                path([(bx,by),(bx,vy)],net); bd.via(bx,vy,net,VD,VDR)
+                path([(bx,vy),(bx,yl),(tx,yl)],net,0.2,layer)
             else: path([(bx,by),(bx,yl),(tx,yl)],net,0.2,layer)
             ends.append((tx,yl,net))
     return ends
@@ -133,7 +134,7 @@ for i,x in enumerate(XC):
         net=bd.pad(FP[ue],io_in).GetNetname()
         path([r2,(r2[0],80.4),(a[0],82.4),a],net,0.25,F,0.4)
         path([o,(o[0],87.9),(j[0],89.6),j],net,0.25,F,0.4)
-    v5p=P2(ue,5); path([v5p,(v5p[0],87.7)],N('+5V'),0.3); bd.via(v5p[0],87.7,N('+5V'),VD,VDR)
+    v5p=P2(ue,5); path([v5p,(v5p[0],82.7)],N('+5V'),0.3); bd.via(v5p[0],82.7,N('+5V'),VD,VDR)
     fp_=FP['F%d'%(10+i)]; pa=[q for q in fp_.Pads() if q.GetNetname()==N('+5V')][0]; pb=[q for q in fp_.Pads() if q.GetNetname()!=N('+5V')][0]
     ax,ay=pa.GetPosition().x/MM,pa.GetPosition().y/MM; bx_,by_=pb.GetPosition().x/MM,pb.GetPosition().y/MM
     for dx in (-0.9,0.9): bd.via(ax+dx,ay,N('+5V'),0.6,0.35)
@@ -152,8 +153,8 @@ def zone(layer,net,poly,prio=0,solid=False,clr=0.25):
     z.SetThermalReliefGap(int(0.25*MM)); z.SetThermalReliefSpokeWidth(int(0.4*MM)); b.Add(z); return z
 def rect(x0,y0,x1,y1): return [(x0,y0),(x1,y0),(x1,y1),(x0,y1)]
 zone(F,N('GND'),rect(0.3,0.3,W-0.3,H-0.3),0)
-zone(B,N('GND'),rect(0.3,0.3,W-0.3,66.0),0)
-zone(B,N('+5V'),rect(0.3,66.6,W-0.3,H-0.3)+[],1,True)
+zone(B,N('GND'),rect(221.5,0.3,W-0.3,66.0),0)
+zone(B,N('+5V'),[(0.3,0.3),(221.0,0.3),(221.0,66.6),(W-0.3,66.6),(W-0.3,H-0.3),(0.3,H-0.3)],1,True)
 # power-stage F zones
 ux,uy=FP['U31'].GetPosition().x/MM,FP['U31'].GetPosition().y/MM
 zone(F,N('V12_IN'),[(224.5,3.0),(244,3.0),(244,10.5),(239.4,10.5),(238.05,18.3),(237.9,18.3),(237.9,19.8),(224.5,19.8)],3,True,0.2)
@@ -177,7 +178,27 @@ def con(rt_,net,src,dst=None,to_net=False,w=None,**kw):
     ok=rt_.connect(net,src,dst,to_net,w,**kw)
     if not ok: fails.append((net,src[0][:2])); print('FAIL',net,src[0][:2],flush=True)
     return ok
+# GND vias for SMD GND pads (both regions)
+def gnd_via(r_,pad,NET='/GND'):
+    x,y=pad.GetPosition().x/MM,pad.GetPosition().y/MM
+    for rr in (0.9,1.2,1.6,2.0,2.6):
+        for a in range(0,360,30):
+            vx=x+rr*math.cos(math.radians(a)); vy=y+rr*math.sin(math.radians(a))
+            i,j=r_.ij(vx,vy)
+            if not(0<=i<r_.nx and 0<=j<r_.ny): continue
+            c=r_.code(NET)
+            if r_.Vg[j,i] not in (-1,c) or r_.T[1][j,i] not in (-1,c): continue
+            res=r_.route(NET,[(x,y,0)],[(vx,vy,0)],False,via_cost=10**6,maxit=3000)
+            if res is None: continue
+            vxy=r_.xy(i,j); r_.commit(NET,res,0.3,(x,y),vxy); bd.via(vxy[0],vxy[1],NET,VD,VDR); r_.block_circle([0,1],vxy[0],vxy[1],VD/2,NET); return True
+    fails.append((NET+'VIA',(round(x,2),round(y,2)))); return False
 t0=time.time()
+for r in FP:
+    f=FP[r]
+    if f.GetPosition().x/MM<221.5 and f.GetPosition().y/MM<62:
+        for pad in f.Pads():
+            if pad.GetNetname()==N('+5V') and pad.GetAttribute()==pcbnew.PAD_ATTRIB_SMD: gnd_via(rt,pad,N('+5V'))
+print('5v vias',len(fails),flush=True)
 # nets: group pads by net within the logic region, connect as trees (nearest-first)
 logic=[r for r in FP if FP[r].GetPosition().x/MM<221 and FP[r].GetPosition().y/MM<62]
 bynet={}
@@ -189,10 +210,7 @@ TARGET5=[(x,70.2,1) for x in [XC[i]+8.6 for i in range(16)]]+[(x,70.2,1) for x i
 order=sorted(bynet,key=lambda n:len(bynet[n]))
 for n in order:
     ps=bynet[n]
-    if n==N('+5V'):
-        for p in ps:
-            con(rt,n,pp(p),TARGET5)
-        continue
+    if n==N('+5V'): continue
     if len(ps)<2: continue
     done=[ps[0]]; rest=ps[1:]
     while rest:
@@ -200,7 +218,6 @@ for n in order:
         d=min(done,key=lambda q:(q.GetPosition()-p.GetPosition()).EuclideanNorm()); con(rt,n,pp(p),pp(d)); done.append(p); rest.remove(p)
 print('logic',time.time()-t0,len(fails),flush=True)
 # +5V trunk to strip if nothing reached it: explicit
-con(rt,N('+5V'),pp(bd.pad(FP['C6'],1)) if bd.pad(FP['C6'],1).GetNetname()==N('+5V') else pp(bd.pad(FP['C6'],2)),TARGET5)
 # power stage small signals with a fine router
 rp=Router(bd,221.5,0,W,70,step=0.125,w=0.2,clr=0.15)
 rp.load_board()
@@ -217,32 +234,19 @@ for n,ps in sorted(bynet.items(),key=lambda kv:len(kv[1])):
         p=min(rest,key=lambda q:min((q.GetPosition()-d.GetPosition()).EuclideanNorm() for d in done))
         d=min(done,key=lambda q:(q.GetPosition()-p.GetPosition()).EuclideanNorm()); con(rp,n,pp(p),pp(d)); done.append(p); rest.remove(p)
 print('power',time.time()-t0,len(fails),flush=True)
-# GND vias for SMD GND pads (both regions)
-def gnd_via(r_,pad):
-    x,y=pad.GetPosition().x/MM,pad.GetPosition().y/MM
-    for rr in (0.9,1.2,1.6,2.0,2.6):
-        for a in range(0,360,30):
-            vx=x+rr*math.cos(math.radians(a)); vy=y+rr*math.sin(math.radians(a))
-            i,j=r_.ij(vx,vy)
-            if not(0<=i<r_.nx and 0<=j<r_.ny): continue
-            c=r_.code(N('GND'))
-            if r_.Vg[j,i] not in (-1,c) or r_.T[1][j,i] not in (-1,c): continue
-            res=r_.route(N('GND'),[(x,y,0)],[(vx,vy,0)],False,via_cost=10**6,maxit=3000)
-            if res is None: continue
-            vxy=r_.xy(i,j); r_.commit(N('GND'),res,0.3,(x,y),vxy); bd.via(vxy[0],vxy[1],N('GND'),VD,VDR); r_.block_circle([0,1],vxy[0],vxy[1],VD/2,N('GND')); return True
-    fails.append(('GNDVIA',(round(x,2),round(y,2)))); return False
 for r in FP:
     f=FP[r]; fx,fy=f.GetPosition().x/MM,f.GetPosition().y/MM
     if fy>62: continue
     r_=rp if fx>=221.5 else rt
     for pad in f.Pads():
-        if pad.GetNetname()==N('GND') and pad.GetAttribute()==pcbnew.PAD_ATTRIB_SMD: gnd_via(r_,pad)
+        if pad.GetAttribute()!=pcbnew.PAD_ATTRIB_SMD: continue
+        if pad.GetNetname()==N('GND') and fx>=221.5: gnd_via(r_,pad)
 print('gnd',time.time()-t0,len(fails),flush=True)
 # stitching GND vias (top region only, B is GND there)
 st=Router(bd,0,0,W,66,step=0.5,w=0.2,clr=0.3); st.load_board(); nst=0
 for x in [6+5*i for i in range(49)]:
     for y in [6+5*j for j in range(12)]:
-        if x>221: continue
+        if x<221: continue
         i,j=st.ij(x,y)
         if all(st.Vg[jj,ii]==-1 for jj in range(j-2,j+3) for ii in range(i-2,i+3) if 0<=jj<st.ny and 0<=ii<st.nx) and all(st.T[l][j,i]==-1 for l in (0,1)):
             bd.via(x,y,N('GND'),0.6,0.3); nst+=1

@@ -25,7 +25,7 @@ for it in range(4):
     for v in U:
         a,c=v['items'][0],v['items'][1]
         net=a['description'].split('[')[1].split(']')[0]
-        if net=='GND': continue
+        if net.lstrip('/')=='GND' and '--gnd' not in sys.argv: continue
         pa=(a['pos']['x'],a['pos']['y']); pc=(c['pos']['x'],c['pos']['y'])
         if not all(x0<p[0]<x1 and y0<p[1]<y1 for p in (pa,pc)): continue
         def lays(desc): return [0] if 'F.Cu' in desc and 'B.Cu' not in desc else ([1] if 'B.Cu' in desc and 'F.Cu' not in desc else [0,1])

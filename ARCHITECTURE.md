@@ -1,5 +1,7 @@
 # LED Cube Controller — Architecture v2 (RGB, hanging strands)
 
+> **2026-10-12:** the branch board is now a 1 m strip of 4 × 250 mm segments in 4 variants (124/64/48/32 connectors per m). See docs/STRIP_BOARD.md. Main board v1.1 adds TPD4E05U06 ESD on all 8 ribbon ports, schematic→PCB parity 0. Footprints: docs/FOOTPRINTS.md.
+
 ## Кратко (RU)
 **Вердикт: PASS WITH RISKS (архитектура + схемы; разводка главной платы — см. отчёт DRC в `hardware/main_v1`).**
 

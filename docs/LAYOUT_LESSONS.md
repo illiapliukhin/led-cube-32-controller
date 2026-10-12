@@ -29,3 +29,9 @@
 - DRC: **0 errors, 0 unconnected**. Warnings: 199 silk overlap/over-copper (generated reference text, cosmetic), 3 zero-length dangling stubs, 2 co-located EPAD holes (ESP32 footprint).
 - ERC (main schematic, generated from the same netlist): 0. Schematic↔PCB parity is **not linked**: the schematic is regenerated from the PCB netlist, so no UUID annotation link exists yet (289 parity items).
 - Branch ERC: 0 errors, 1 warning (missing custom eFuse footprint).
+
+## 2026-10-12 additions
+* ESD at every connector, including the 8 ribbon ports (6 × TPD4E05U06 per port, bottom side, ≤ 4.5 mm from the header pins).
+* The schematic is the source of truth: `tools/sch2pcb.py` links KIIDs and checks value, footprint and net, so the DRC parity gate = 0.
+* Zone refill runs before every plot (`tools/fab.sh`). 3D models are fetched before renders.
+* Gate status: main_v1 DRC errors 0, unconnected 0, parity 0. strip variants: ERC 0, PCB pending.
