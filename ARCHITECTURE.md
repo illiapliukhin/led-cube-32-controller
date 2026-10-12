@@ -1,135 +1,96 @@
-# LED Cube 32×32×32 Controller — Architecture Study (Phase 1)
+# LED Cube Controller — Architecture v2 (RGB, hanging strands)
 
 ## Кратко (RU)
-**Вердикт: PASS WITH RISKS (архитектура, без схемы/разводки).**
-- Куб 32×32×32 = 32 768 одноцветных LED, шаг 31,25 мм, ~1 м³. **Слои = общий анод (32 слоя), вертикальные колонны = катоды (1024 колонны).** Развёртка **1/32** по слоям.
-- Драйверы колонн: **64× MBI5153 (16 кан., встроенные SRAM + S-PWM, 1:32 scan)** вместо MBI5124 из v15. С MBI5124 МК должен был бы сам делать BCM: 252 Мбит/с — нереально для одного ESP32-S3. С MBI5153 МК передаёт только кадр: 31,5 Мбит/с (16 бит, 60 fps).
-- **Модульность:** 16 плиток-оснований 250×250 мм (4×4), на каждой 4× MBI5153 = 64 колонны; провода колонн впаиваются прямо в металлизированные отверстия плитки → **никаких кабелей на 1024 канала**. Плитки соединяются с контроллером короткими IDC-шлейфами 2×8.
-- Контроллер (одна плата на краю куба): **ESP32-S3** (Wi-Fi, SD, анимации) + **RP2040** (PIO: 16 параллельных линий данных, GCLK, синхронизация слоёв) + 32 P-MOSFET **AOD4185** (40 В/40 А) для слоёв (ток слоя 10,24 А пик).
-- Ток 10 мА пик, средний 0,31 мА на LED; обновление ~1,5 кГц (GCLK 25 МГц), 16-бит градации (S-PWM).
-- Питание: 5 В, **Mean Well LRS-100-5 (18 А)**; LED всё-включено 51 Вт. Вариант 15 мА → LRS-150F-5.
-- LED: **5 мм матовые (diffused) белые/одноцветные**, провод каркаса **0,8 мм лужёная медь** (~2,2 км, ~10 кг), ~67 600 паек → нужны кондукторы (jig).
-- **Масштабирование** (48/64 LED в колонне, 48³, 64³): колонна делится на зоны по ≤32 LED, каждая зона со своими драйверами → скважность не хуже 1/32, яркость постоянна; растут только число плиток, ток БП и полоса данных. См. §9.
-- Ориентировочная стоимость: электроника ≈ $300–350, LED+провод ≈ $600–900, рама ≈ $150–300 → **итого ≈ $1 100–1 500**.
+**Вердикт: PASS WITH RISKS (архитектура + схемы; разводка главной платы — см. отчёт DRC в `hardware/main_v1`).**
 
----
+**Рекомендация:** адресные **тактируемые RGB-пиксели HD108** (16 бит/канал, внутренний ШИМ 27 кГц, SPI до 40 МГц) на **висящих нитях** (pixel string / лента 32 LED/м). Мультиплексирование не нужно → нет мерцания на камеру, нет ghosting, «почти идеальная» картинка.
+- **Топология:** 1 главная плата (ESP32-S3) → 8 портов IDC 2×20 → в каждом порту цепочка из 8 **ветвевых плат** (регенерация шины) → каждая ветвевая плата держит **16 нитей**. Итого 1 главная плата = 64 ветви = **1024 нити**.
+- **Трюк:** ESP32-S3 LCD_CAM выдаёт 16-битную параллельную шину + общий CLK. HD108 сдвигает данные только по фронтам CLK, поэтому ветвь выбирается **гейтированием CLK** (компаратор адреса 74HC688 + 74AHC1G32 на ветви). Одна DMA-передача = 16 нитей одновременно.
+- **1 м³:** 32³ = 32 768 RGB, шаг 31,25 мм, **~96 fps** с одной главной платой, 16 бит цвета, 27 кГц ШИМ. Премиум: 48³ (20,8 мм, 110 592 LED, 3 главные платы, ~65 fps).
+- **2 м³:** 64³ = 262 144 RGB, шаг 31,25 мм, 4 главные платы с синхронизацией кадра (SYNC), ~49 fps. 96³/128³ — только как исследовательский вариант (стоимость/мощность/вес).
+- **Мощность (32³):** абсолютный максимум белого 1966 А при 5 В (9,8 кВт) — нереально и не нужно. Ограничитель яркости (ABL) 25 % → ≤ 492 А, типичная сцена 3D-объекта (APL ≈ 15 %) ≈ 295 А / 1,5 кВт. Питание: **9× Mean Well LRS-350-5 (60 А)**, по 1 БП на ~7 ветвей, инжекция на каждой ветви (2 клеммы), нити 4-жильные 22 AWG (1 м) / 20 AWG (2 м).
+- **Стоимость LED (32³):** ≈ $5,9–11,5 тыс. (HD108/SK9822 нити $0,18–0,35/пиксель); электроника ≈ $400–600; БП ≈ $350.
+- **Вес (32³):** ≈ 60 кг висящей массы → верхняя рама из профиля 4040, нити с грузиками/нижней сеткой-растяжкой.
 
-## 1. Goal & constraints
-| Item | Value |
-|---|---|
-| Voxels | 32×32×32 = 32 768, single colour |
-| Size | ~1 m³, pitch 1000/32 = 31.25 mm |
-| Controller | ONE main board (may contain several MCUs) + passive-ish modular driver tiles |
-| Refresh | ≥ 960 Hz flicker-free (camera-safe preferred) |
-| Hardware | real, orderable parts (LCSC/JLC first) |
-| Baseline | v15 mono board (ESP32-S3, MBI5124, 74HC154 + AO3403, 1/32, 960 Hz) — copied to `hardware/v15_baseline/` |
+## 1. Resolution / size options (`calc/rgb_scaling.py` → `calc/rgb_scaling_results.txt`)
+| Size | N/axis | Pitch | LEDs | Strands | Branch boards (16 str) | Main boards | fps (16-bit) | I max (A) | I ABL 25% | I avg (APL 15%) | LRS-350-5 | Mass kg | LED cost $ |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 m | **32** | 31.2 mm | 32 768 | 1 024 | 64 | **1** | 96 | 1 966 | 492 | 295 | 9 | 60 | 5.9k–11.5k |
+| 1 m | 48 | 20.8 mm | 110 592 | 2 304 | 144 | 3 | 65 | 6 636 | 1 659 | 995 | 28 | 179 | 20k–39k |
+| 1 m | 64 | 15.6 mm | 262 144 | 4 096 | 256 | 4 | 49 | 15 729 | 3 932 | 2 359 | 66 | 396 | 47k–92k |
+| 2 m | **64** | 31.2 mm | 262 144 | 4 096 | 256 | 4 | 49 | 15 729 | 3 932 | 2 359 | 66 | 478 | 47k–92k |
+| 2 m | 96 | 20.8 mm | 884 736 | 9 216 | 576 | 9 | 33 | 53 084 | 13 271 | 7 963 | 222 | 1 430 | 159k–310k |
+| 2 m | 128 | 15.6 mm | 2.1 M | 16 384 | 1 024 | 16 | 25 | 125 829 | 31 457 | 18 874 | 525 | 3 172 | 377k–734k |
 
-## 2. Assumptions
-| # | Assumption | Status |
-|---|---|---|
-| A1 | LED Vf ≈ 3.0–3.2 V @10 mA (white) ; Cj ≈ 30 pF | typical, verify on chosen LED |
-| A2 | MBI5153 13-bit mode: 513 GCLK per scan line, GCLK ≤ 25–33 MHz | **verify against datasheet** before schematic |
-| A3 | ICND2153 is drop-in second source (same SSOP-24 pinout) | pinout matches per datasheet; protocol near-identical — verify |
-| A4 | 5 mm diffused LED ~1–3 cd @20 mA; 0.31 mA avg readable indoors at 1–3 m | to be tested with 1 column sample |
-| A5 | Max cube current = all LEDs of 1 layer on (only one layer active at a time) | true by construction |
+**Recommended per size (for convincing real 3D objects):**
+- **1 m³ → 32³ (baseline), 48³ (premium).** 32 voxels per axis is enough for recognisable solid objects (a head or a car is about 20–25 voxels), and 16-bit colour gives smooth shading. 48³ noticeably improves the silhouettes, but costs 3.4× the LEDs and power.
+- **2 m³ → 64³ at 31 mm pitch.** The viewing distance is larger (3–5 m), so the angular resolution is the same as a 1 m 32³ cube viewed from 1.5–2.5 m. 96³ and up would need megawatt-class-avoidance ABL, a tonne-level structure and $150k+ of LEDs, which is not realistic.
+- Inner-voxel visibility (transparency): pixel *strings* (nodes on wires) are better than strips. For strips, use 5–10 mm wide 32 LED/m strips mounted edge-on to the main viewing direction.
 
-## 3. Multiplex scheme (calculated, `calc/cube_calc.py` → `calc/results.txt`)
-| Scheme | Channels | 16-ch drivers | Duty | Avg/LED @10 mA pk | Peak scan current | Verdict |
-|---|---|---|---|---|---|---|
-| **1/32 per layer** | 1024 | 64 | 3.1 % | 0.31 mA | 10.2 A | **chosen** |
-| 1/16 (2 layer groups) | 2048 | 128 | 6.25 % | 0.63 mA | 20.5 A | 2× brightness, 2× drivers & current, double tile wiring — fallback if A4 fails |
-| 1/8 | 4096 | 256 | 12.5 % | 1.25 mA | 41 A | too many channels/cables |
-| 1/32 @15 mA | 1024 | 64 | 3.1 % | 0.47 mA | 15.4 A | cheap brightness knob (Rext change + bigger PSU) — **recommended reserve** |
-
-Brightness knob order: (1) raise Ipk to 15–20 mA (MBI5153 needs VDD = 5 V for >10 mA), (2) higher-efficiency LED, (3) only then 1/16.
-
-## 4. Driver chip selection
-| Chip | Feature | Scan | LCSC | Price (100+) | Verdict |
+## 2. Pixel technology choice
+| Option | Colour bits | PWM refresh | Interface | Strand drive | Verdict |
 |---|---|---|---|---|---|
-| MBI5124 (v15) | plain shift-reg CC sink, no PWM | MCU BCM | yes | ~$0.35 | MCU would need 252 Mbit/s → **rejected** |
-| **MBI5153GP-A** | 16 ch, SRAM, S-PWM 16-bit, pre-charge anti-ghost, 1:32 | 1–32 | [C183654](https://www.lcsc.com/product-detail/LED-Drivers_MBI5153GP_C183654.html) ~1–2 k stock, marked *discontinued* | $0.24–0.36 | **chosen; buy 80 now** |
-| ICND2153AP (Chipone) | same class, 16 KB SRAM, 3840 Hz, 0.5–25 mA, SSOP-24 | 1–32 | [JLC C6288664](https://jlcpcb.com/partdetail/ChiponeTech-ICND2153AP/C6288664) (stock 0 now) | ~$0.03–0.05 | second source / footprint compatible |
-| MBI5253 | 1:32 S-PWM, newer | 1–32 | JLC ~$0.37 | | alternative |
-| TLC5955 (TI) | 48 ch, 16-bit PWM, no scan SRAM | static | Digikey ~$3 | | static-drive only, expensive → rejected |
+| **HD108** | 16 per colour + 5-bit gain/colour | 27 kHz | DATA+CLK, ≤40 MHz | clock-gated parallel bus | **chosen** |
+| HD107S / APA102 | 8 + 5-bit global | 20–27 kHz | DATA+CLK, ≤40 MHz | same | fallback (cheaper, 8-bit banding in dark gradients) |
+| SK9822 | 8 + 5-bit | 4.7 kHz | DATA+CLK, ~15 MHz | same, lower PCLK | fallback, camera-visible at high shutter |
+| WS2812B / SK6812 | 8 | 0.4–1.2 kHz | 800 kbps single wire | needs 1024 independent outputs | rejected (flicker on camera, no clock gating → many MCUs) |
+| WS2815 (12 V) | 8 | ~2 kHz | 800 kbps + backup | same | rejected for same reason; nice 12 V wiring though |
+| Multiplexed RGB matrix (3×1024 sinks, 1/32) | 13–14 | 1.4 kHz | MBI5153 ×192 | wiring nightmare with hanging RGB | rejected (see v1 doc) |
 
-## 5. Physical partition: central vs distributed
-| Option | Cables | Problems | Verdict |
-|---|---|---|---|
-| One central board with all 1024 channels | 1024 wires × ~1–1.5 m → 64 IDC ribbons | huge harness, crosstalk/ghosting, capacitance, assembly hell | rejected |
-| **Central controller + 16 base tiles (drivers under columns)** | 16 data ribbons + 32 anode feeds | tiles 250×250 mm 2-layer; columns soldered direct | **chosen** |
-| Driver boards on each layer edge (anode-side columns horizontal) | 32 boards, 32 ribbons up to 1 m | layer boards in view, more boards | alternative |
+Market references (prices are indicative, Oct 2026):
+- HD108 5050 strip 16-bit/27 kHz, 30–144 LED/m, custom length, JST-SM 4-pin: [Rose Lighting](https://www.rose-lighting.com/products/fastest-16bit-hd108ledstrip/); protocol summary: [ENTTEC HD108](https://www.enttec.com/pixel-protocols/HD108)
+- SK9822 strip 30/32/36… LED/m (32/m = exactly 31.25 mm pitch), $4.98–30 per m: [BTF-LIGHTING](https://www.btf-lighting.com/products/1-sk9822-led-pixel-strip-data-and-clock-dc5v)
+- 12 mm bullet pixel strings 5 V (custom IC/pitch from factories, MOQ quote): [example](https://www.ledpixellight.com/sale-6564065-bullet-type-12mm-led-pixel-f8-dc05v-rgb-full-color-led-pxiel-string-light.html)
+- **Open item:** a factory quote for an "HD108 pixel string, 32 nodes, 31.25 mm pitch, 4-core 22 AWG, XH-4 plug" (1 100 pcs).
 
-Tile (×16): 250×250 mm FR-4 2-layer 1.6 mm, 8×8 grid of plated holes Ø1.0 mm at 31.25 mm, 4× MBI5153 (2 lanes daisy-chained or 1 lane of 4 chips), Rext, 74AHCT245 input buffer, 2×8 IDC IN + OUT (pass-through GCLK/LE/power-sense), local 5 V 100 µF + 0.1 µF per chip. Tile ground = column current return → 2× M3 lug to ground bus bar.
+## 3. Data path & timing
+- Per strand: N × 64 bit + start (64) + end (≥ N/2) ≈ 2 128 clocks for N = 32.
+- Bus: ESP32-S3 LCD_CAM i80 16-bit, PCLK 13.3 MHz (conservative: ribbon + 8-deep 74AHCT regen chain; duty-cycle distortion ≤ 8×1.5 ns).
+- One frame = 64 branches × 2 128 clocks = 136 k clocks → 10.2 ms → **96 fps**. PSRAM DMA = 2 B × 13.3 MHz = 26.6 MB/s (within S3 octal PSRAM capability). Double frame buffer = 2 × 272 kB.
+- Branch select: 6 address lines (static during a branch burst) → 74HC688 vs solder-jumper ID → `CLK OR SEL_N` (74AHC1G32). Unselected branches see CLK stuck high, so they shift nothing.
+- Flicker: none (HD108 internal 27 kHz PWM, independent of fps). Colour: 16-bit + 5-bit per-channel current gain → gamma 2.4 without banding.
+- Multi-board (2 m³): each main board drives ≤ 64 branches. A shared SYNC line (opto/RS-485 pair on a spare port pin) latches all boards' frame start; content is distributed over Wi-Fi/Ethernet (W5500 option) as voxel slabs.
 
-Ghosting/parasitics: column node = 32 LEDs × 30 pF ≈ 1 nF → handled by MBI5153 pre-charge; layer node = 1024 × 30 pF ≈ 31 nF → 47 Ω active pull-down/ blanking ≥ 2 µs per line (τ = 1.4 µs). EMI: 10 A layer edges at 49 kHz line rate → gate resistor for ~0.5–1 µs slew, layer feed + ground return routed as pair along the same cube edge, twisted-pair (GND-signal) ribbon for 25 MHz-class GCLK, series 33 Ω source termination; ribbon ≤ 0.5 m.
+## 4. Power distribution (32³)
+- Firmware ABL: total current ≤ 25 % of max = 492 A (2.46 kW). Typical 3D-object scenes (APL 10–15 %) draw 200–300 A.
+- 9× LRS-350-5 (60 A each, ~$35): each PSU feeds 7–8 branch boards via 2× 14 AWG pairs. Each branch board takes ≤ 7.7 A at ABL on 2 terminal blocks. The main board is powered separately (5 V/2 A plus USB).
+- Strand: 32 nodes, 1 m, 4-core 22 AWG. At ABL, 0.48 A → 0.03 V drop. Full white without ABL would be 1.92 A → 0.10 V.
+- Protection: one 10 A blade fuse per branch-board feed; 60 A per PSU output bus; PSU OVP built in.
+- Heat: ≤ 2.5 kW (ABL) spread over 1 m³ of thin strands, which free air convection handles. PSUs go in a separate ventilated rack.
 
-## 6. MCUs & bandwidth
-- Frame data: 32768 × 16 bit × 60 fps = **31.5 Mbit/s**; split in 16 lanes (one per tile) = **2 Mbit/s per lane** — trivial.
-- **ESP32-S3-WROOM-1-N16R8**: content, Wi-Fi/BLE, SD/PSRAM frame buffer (64 kB/frame). Sends frames to RP2040 by QSPI/SPI 40 MHz.
-- **RP2040** (LCSC C2040, ~$0.7): PIO SM0 — 16-bit parallel OUT (16 SIN lanes) + shared DCLK/LE; SM1 — continuous GCLK 25 MHz; SM2 — counts 513 GCLK and steps layer address (74HC154 ×2 → 32 gate drivers). Deterministic timing is the reason for RP2040; ESP32-S3-only (LCD_CAM i80 16-bit + LEDC + PCNT) is possible alternative, risk: row sync jitter.
-- Alt: iCE40UP5K / Gowin GW1N FPGA — overkill, toolchain cost; keep as option for 64³.
+## 5. Boards
+**Main board v1** (`hardware/main_v1`, 300×130 mm, 2-layer):
+- ESP32-S3-WROOM-1-N16R8 (C2913202), USB-C (C165948) for programming, AMS1117-3.3 (C6186), SS34 OR-ing (C8678), 5 V terminal (C8465).
+- 24× 74LVC245APW (C6082) line drivers, 3 per port: D0–7, D8–15, CLK+A0–A5.
+- 8× IDC 2×20 box headers (C9138), with buffer OE gated by firmware (OE_N pulled up).
+- Port pinout: odd 1–31 = D0..D15, 33 = CLK, 35/37/39 = A0–A2, 4/8/12 = A3–A5, all other pins GND.
 
-## 7. Power, voltage drop, thermal (`calc/results.txt`)
-- Layer peak current 1024 × 10 mA = **10.24 A**; LED all-on 51 W; logic ~9 W → **PSU 5 V ≥ 15 A: Mean Well LRS-100-5 (18 A)**; 15 mA option → LRS-150F-5 (30 A). Main fuse 20 A blade (ATO) + polyfuse per tile 1 A (tile logic only).
-- Budget: Vf 3.1 + driver knee 0.5 + FET 0.10 (AOD4185 ~10 mΩ) + feed 0.14 (1.5 mm², 1.2 m, 2 feed points) + mesh 0.15 = 4.0 V → rail 4.5–5 V. Use LRS trim to **4.6 V** to cut driver dissipation (≈10 W total, 160 mW/chip — fine for SSOP-24).
-- Layer FET: 32× **AOD4185** (P-ch, -40 V, -40 A, DPAK); gate driven by 74HC154 → NPN/ small N-FET level shifter to 5 V (v15 AO3403 3.3 V gate drive is inadequate at 10 A). Dissipation 10.24² × 0.012 Ω × 1/32 ≈ 40 mW avg each.
-- Column wire 0.8 mm, 1.05 m: 36 mΩ → 0.36 mV @10 mA (irrelevant). Layer row wire carries ≤0.32 A → 5.5 mV.
+**Branch board v1** (`hardware/branch_v1`, schematic; proposed 495×30 mm strip lying on the top frame, strands hang at 31.25 mm pitch):
+- 3× 74AHCT245 (C173388) regenerate the bus to the OUT port (daisy chain).
+- 74HC688 (C88042) address compare against 6 solder-jumper ID bits; 74AHC1G32 (C7470) clock gate.
+- 2× 74AHCT245 data drivers + 2× 74AHCT245 clock fan-out, each output through 33 Ω (C23140).
+- 16× JST XH 4-pin strand plugs (C144395): +5V, DATA, CLK, GND.
+- 2× injection terminals, plus bulk and decoupling caps.
 
-## 8. Cables, connectors, LEDs, mechanics
-| Link | Choice | Notes |
+## 6. Cables & connectors
+| Link | Part | Notes |
 |---|---|---|
-| Controller→tile data | 2×8 IDC 2.54 mm ribbon, box header (e.g. LCSC C3405-class 2x8 box header), alternating GND | 16 cables ≤0.5 m |
-| Layer anode feeds | **Molex Micro-Fit 3.0 2×8 (43025-1600 housing / 43045-1600 header)**, 2 pins per layer, 18 AWG, 4 connectors | ≤5 A/pin at 18 AWG per pin pair OK for 10.24 A peak (31 mA-avg duty) |
-| PSU→controller | Micro-Fit 2×2 or screw terminal 2×(2×1.5 mm²) | 20 A fuse |
-| Tile ground return | 2.5 mm² bus to PSU − | |
-| LED | 5 mm diffused white (or colour), wide angle, bulk ~$0.01–0.02 | 1 m viewing: SMD-on-wire (NCD0603W1 v15) rejected — 65k fragile joints, too small, no self-structure |
-| Structure wire | 0.8 mm tinned Cu (columns straightened by stretching 1–2 %) | ~2.2 km, ~10 kg |
+| Main → branch chain | 40-way 1.27 mm flat ribbon, IDC 2×20 sockets | ≤ 1 m per hop, every 2nd conductor GND (except A3–A5 pairs) |
+| Strand | 4-core 22 AWG (1 m) / 20 AWG (2 m), JST XH-4 plug at the top | data/clock twisted with GND if custom |
+| Power | 14 AWG pairs PSU → branch, 10 A fuse | |
 
-Mechanics: aluminium 2040 frame 1.1 m cube; columns **hang** from top comb or stand on base tiles with bottom alignment; recommended: base tiles carry columns, top acrylic/carbon comb holds column tops in tension (springs) → straightness. Each layer built flat on a jig (32 rows × 32 LEDs, anode legs to row wire), then threaded onto columns. Mass: LEDs 8 kg + wire 10 kg ≈ 18–20 kg.
+## 7. Risks
+| Risk | Sev | Mitigation |
+|---|---|---|
+| HD108 pixel string at exact 31.25 mm pitch not off-the-shelf | H | 32 LED/m strips (BTF/Rose) or factory custom quote; fallback HD107S |
+| Bus SI at 13 MHz over 8 ribbon hops | M | 74AHCT regen per hop, 33 Ω series on strand outputs; lower PCLK if needed (fps scales linearly) |
+| ESP32-S3 PSRAM DMA bandwidth + CPU frame packing | M | 16×16 bit-transpose in IRAM; option ESP32-P4 / FPGA for 48³+ |
+| Power/thermal at 2 m scale | H | ABL mandatory; PSU per zone; content tuned for dark volume |
+| Mechanical: 60 kg (1 m) / 480 kg (2 m) hanging mass | H | 4040 frame, ceiling anchors, structural review |
+| ID jumpers mis-set (two branches answering) | L | boot-time self-test via LED pattern |
 
-## 9. Scalability (`calc/scaling.py` → `calc/scaling_results.txt`)
-MBI5153 scans max 1:32, so a column taller than 32 LEDs is split into **zones** (electrically cut column segments), each zone with its own driver tile set (upper zone: tile ceiling on top or mid-height tiles). Zones scan in parallel → duty stays ≥ 1/32.
-
-| Cube | LEDs | Scan | Zones | Channels | Drivers | Tiles | Avg mA | Refresh | PSU A | Mbit/s (16b, 60fps) |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 32×32×32 | 32 768 | 1/32 | 1 | 1024 | 64 | 16 | 0.31 | 1523 | 12 | 31 |
-| 32×32×48 | 49 152 | 1/24 | 2 | 2048 | 128 | 32 | 0.42 | 2031 | 23 | 47 |
-| 32×32×64 | 65 536 | 1/32 | 2 | 2048 | 128 | 32 | 0.31 | 1523 | 23 | 63 |
-| 48³ | 110 592 | 1/24 | 2 | 4608 | 288 | 72 | 0.42 | 2031 | 48 | 106 |
-| 64³ | 262 144 | 1/32 | 2 | 8192 | 512 | 128 | 0.31 | 1523 | 84 | 252 |
-
-Alternative without zones: 1/64 scan (not supported by MBI5153; needs MBI5124 + FPGA BCM) → half brightness — rejected.
-Limits: per-layer current X·Y·10 mA (64×64 → 41 A → split each layer into 4 quadrant FETs); PSU (64³ → 2× LRS-350-5 parallel zones); data: 128 lanes → 2–4 RP2040 or one FPGA; mechanics: 2 m columns need intermediate combs. **Modular rule:** tile = 64 columns × 32 LEDs, ID by DIP/address, controller lanes = tile count, so the same tile PCB scales from 16³ to 64³.
-
-## 10. BOM estimate (32³, qty 1 cube)
-| Item | Qty | Unit | Total |
-|---|---|---|---|
-| MBI5153 (+spares) | 80 | $0.35 | $28 |
-| Tile PCB 250×250 2L + assembly | 16 | ~$10 | $160 |
-| Controller PCB + ESP32-S3 + RP2040 + 32 FETs | 1 | ~$60 | $60 |
-| PSU LRS-100-5 | 1 | $20 | $20 |
-| Cables/connectors (IDC, Micro-Fit, wire) | – | – | $50 |
-| LEDs 5 mm (+5 %) | 34 500 | $0.015 | $520 |
-| 0.8 mm tinned Cu | 2.3 km | – | $200–350 |
-| Frame 2040 + combs | – | – | $150–300 |
-| **Total** | | | **≈ $1 200–1 500** |
-
-## 11. Risk register
-| Risk | Sev | Lik | Mitigation |
-|---|---|---|---|
-| MBI5153 discontinued / low stock | H | M | buy 80 now; ICND2153 footprint-compatible second source |
-| 0.31 mA avg too dim | M | M | build 1 test column; 15–20 mA Rext option; 1/16 fallback |
-| MBI5153 protocol (GCLK/LE command timing) complexity | M | M | RP2040 PIO prototype on v15-sized test tile first |
-| 67 k solder joints, assembly time 300–500 h | H | H | jigs, layer-at-a-time testing with tile tester |
-| Layer 10 A switching EMI / ringing on 1 m feeds | M | M | slew control, paired returns, scope check |
-| Column straightness / sag | M | M | tensioned columns, combs |
-
-## 12. Open decisions
-1. LED colour & exact part (test 3 samples for brightness at 0.3–0.5 mA avg).
-2. Ipk 10 vs 15 mA (PSU LRS-100 vs LRS-150F).
-3. RP2040 co-processor vs ESP32-S3-only firmware.
-4. Columns standing on base vs hanging from top tiles.
-5. Final cube height (32 vs 48/64 → 1 or 2 zones).
-
-## 13. Next phase
-Phase 2: schematics — (a) tile board (4× MBI5153, buffers, IDC in/out), (b) controller (ESP32-S3 + RP2040 + 32 layer FET drivers, power entry); then tile layout (250×250, 2-layer, smooth arc bends), plus a 1-tile + 1-column test rig before mass ordering.
+## 8. Next steps
+1. Get a factory quote for HD108 strings, and order 2 sample strands + 1 strip.
+2. Bring-up with 1 main board + 1 branch board (16 strands, 512 px).
+3. Branch board layout (495×30 mm).
+4. Firmware: LCD_CAM DMA + bit-transpose + ABL + Wi-Fi voxel stream.

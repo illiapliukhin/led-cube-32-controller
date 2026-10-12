@@ -1,0 +1,4 @@
+*.kicad_prl
+*-backups/
+fp-info-cache
+hardware/main_v1/gen.log

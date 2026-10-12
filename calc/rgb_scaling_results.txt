@@ -1,0 +1,15 @@
+ size N/axis pitch mm      LEDs strands branch(16) ports(8br) mainboards fps@1MB fps total   Imax A   ABL A   avg A PSU(LRS-350-5,60A)    kg    LED cost $
+   1m     32     31.2    32,768    1024         64          8          1      96        96     1966     492     295                  9    60   5898-11469 
+   1m     48     20.8   110,592    2304        144         18          3      29        65     6636    1659     995                 28   179  19907-38707 
+   1m     64     15.6   262,144    4096        256         32          4      12        49    15729    3932    2359                 66   396  47186-91750 
+   2m     64     31.2   262,144    4096        256         32          4      12        49    15729    3932    2359                 66   478  47186-91750 
+   2m     96     20.8   884,736    9216        576         72          9       4        33    53084   13271    7963                222  1430 159252-309658
+   2m    128     15.6 2,097,152   16384       1024        128         16       2        25   125829   31457   18874                525  3172 377487-734003
+
+Notes:
+ fps@1MB = one main board driving everything; fps total = with 1 main board per 64 branches, boards frame-synced (SYNC line).
+ Refresh/flicker is NOT tied to fps: HD108 has internal 27 kHz PWM, 16-bit per colour.
+ Strand current full white: N*60 mA (32 -> 1.92 A, 64 -> 3.84 A); per strand 4-core 22 AWG ok to 2 A/1 m, 20 AWG for 2 m / 64 LEDs.
+  strand 32 LEDs 1 m @ABL 0.48 A: drop (distributed, 2 conductors) 22AWG 0.03 V, 20AWG 0.02 V, 18AWG 0.01 V; inject both ends if >0.3 V
+  strand 64 LEDs 2 m @ABL 0.96 A: drop (distributed, 2 conductors) 22AWG 0.10 V, 20AWG 0.06 V, 18AWG 0.04 V; inject both ends if >0.3 V
+  strand 128 LEDs 2 m @ABL 1.92 A: drop (distributed, 2 conductors) 22AWG 0.20 V, 20AWG 0.13 V, 18AWG 0.08 V; inject both ends if >0.3 V

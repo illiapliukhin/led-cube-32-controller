@@ -1,13 +1,10 @@
 flowchart LR
-  PSU["Mean Well LRS-100-5<br/>5V 18A (LED+logic)"] -->|"Micro-Fit / 2x 1.5mm²"| CTRL
-  subgraph CTRL["Controller board (cube edge)"]
-    ESP["ESP32-S3-WROOM-1 N16R8<br/>WiFi, SD, animations"] -->|"QSPI 40 MHz<br/>frame 32 kB"| RP["RP2040<br/>PIO: 16 data lanes,<br/>DCLK/LE/GCLK, row sync"]
-    RP --> DEC["2x 74HC138/154 + gate drivers"]
-    DEC --> FET["32x P-MOSFET AOD4185<br/>(10-15 A, 40V, DPAK)"]
+  WIFI["Wi-Fi / USB content"] --> MB
+  subgraph MB["Main board v1 (ESP32-S3-N16R8)"]
+    ESP["LCD_CAM i80 16-bit + CLK<br/>A0..A5 branch address"] --> DRV["24x 74LVC245<br/>8 ports"]
   end
-  FET -->|"32 layer anode feeds<br/>4x Micro-Fit 2x8, 1.5mm² wire,<br/>2 feed points per layer"| CUBE
-  RP -->|"16 lanes, 2x8 IDC 2.54 ribbon<br/>twisted-pair, 74HC245/AHCT buffered"| T
-  subgraph T["16 base tiles 250x250 mm (4x4)"]
-    D["each: 4x MBI5153 (64 ch)<br/>64 plated holes for column wires"]
-  end
-  T -->|"1024 column cathode wires<br/>soldered direct, no cables"| CUBE["Cube 32x32x32<br/>5 mm diffused white, pitch 31.25 mm"]
+  DRV -->|"IDC 2x20 ribbon"| B1["Branch 0<br/>regen + ID compare<br/>CLK gate"]
+  B1 -->|"daisy chain x8"| B2["Branch 1..7"]
+  B1 --> S1["16 hanging HD108 strands<br/>32 px each, JST XH-4"]
+  PSU["9x LRS-350-5<br/>5V 60A each, ABL 25%"] -->|"14 AWG, 10A fuse"| B1
+  SYNC["SYNC to other main boards (2 m cube)"] --- MB
