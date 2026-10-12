@@ -11,7 +11,10 @@ class Board:
             n=pcbnew.NETINFO_ITEM(s.b,name); s.b.Add(n); s.nets[name]=n
         return s.nets[name]
     def fp(s,lib,name,ref,val,x,y,rot=0,fields=None):
-        f=pcbnew.FootprintLoad(FPLIB+lib+'.pretty',name)
+        import os
+        path=os.path.join(os.path.dirname(os.path.abspath(__file__)),'../lib/cube.pretty') if lib=='cube' else FPLIB+lib+'.pretty'
+        f=pcbnew.FootprintLoad(path,name)
+        f.SetFPID(pcbnew.LIB_ID(lib,name))
         f.SetReference(ref); f.SetValue(val); s.b.Add(f)
         f.SetPosition(V(x,y)); f.SetOrientationDegrees(rot)
         for k,v in (fields or {}).items():

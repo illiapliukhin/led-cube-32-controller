@@ -40,8 +40,8 @@ F1=bd.fp('Fuse','Fuse_1812_4532Metric','F1','PTC 2A/16V',20,106,90,lc('C20812','
 D3=bd.fp('Diode_SMD','D_SMA','D3','SS34 (rev.pol.)',22,96,0,lc('C8678','SS34'))
 D4=bd.fp('Diode_SMD','D_SMB','D4','SMBJ15A',10,104,90,lc('C83846','SMBJ15A'))
 U2=bd.fp('Package_TO_SOT_SMD','TSOT-23-6','U2','AP63203WU-7',36,100,0,lc('C780769','AP63203WU-7'))
-L1=bd.fp('Inductor_SMD','L_Bourns_SRP7028A_7.3x6.6mm','L1','3.3uH',41,106,0,lc('C167219','FXL0630-3R3-M'))
-C1=C('C1','10uF50V',30,92,0); C2=C('C2','100nF',31,100,90); C7=C('C7','100nF',40,96,0)   # C7 = BST
+L1=bd.fp('cube','L_Cjiang_FXL0630','L1','3.3uH',41,106,0,lc('C167219','FXL0630-3R3-M'))
+C1=C('C1','10uF50V',30,92,0); C2=C('C2','100nF',31,100,90); C7=C('C7','100nF',39.2,99.5,90)   # C7 = BST
 C3=C('C3','22uF',46,92,0); C4=C('C4','22uF',46,112,90); C5=C('C5','100nF',42,82,0); C8=C('C8','47uF',39,88,0)
 J9=bd.fp('Connector_USB','USB_C_Receptacle_HRO_TYPE-C-31-M-12','J9','USB-C',32,125.5,0,lc('C165948','TYPE-C-31-M-12'))
 D1=bd.fp('Diode_SMD','D_SMA','D1','SS34',27,112,0,lc('C8678','SS34'))
@@ -53,9 +53,9 @@ R1=Rr('R1','10k',26,86,90); C6=C('C6','1uF',30,86,90)
 R4=Rr('R4','10k',44,36,0); R5=Rr('R5','1k',30,40,0)
 LED1=bd.fp('LED_SMD','LED_0603_1608Metric','D2','STATUS',30,36,0,lc('C2286','KT-0603R'))
 for i,(x,y) in enumerate([(4,4),(W-4,4),(4,H-4),(W-4,H-4),(153.5,42)]):
-    bd.fp('MountingHole','MountingHole_3.2mm_M3','H%d'%(i+1),'M3',x,y)
+    h=bd.fp('MountingHole','MountingHole_3.2mm_M3','H%d'%(i+1),'M3',x,y); h.SetBoardOnly(True); h.SetExcludedFromBOM(True); h.SetExcludedFromPosFiles(True)
 for i,(x,y) in enumerate([(12,4),(W-5,14),(W-5,H-14)]):
-    bd.fp('Fiducial','Fiducial_1mm_Mask2mm','FID%d'%(i+1),'FID',x,y)
+    h=bd.fp('Fiducial','Fiducial_1mm_Mask2mm','FID%d'%(i+1),'FID',x,y); h.SetBoardOnly(True); h.SetExcludedFromBOM(True)
 # ---------------- nets: MCU/power ----------------
 def setn(f,num,net): bd.setnet(f,num,net)
 for p in U1.Pads():
@@ -66,7 +66,8 @@ two(F1,'VIN12','V12F')                  # PTC
 two(D3,'VIN','V12F')                    # SMA pad1=cathode -> VIN, anode=V12F (reverse polarity)
 two(D4,'V12F','GND')                    # SMB pad1=cathode on +, anode GND
 setn(U2,1,'+3V3'); setn(U2,2,'VIN'); setn(U2,3,'VIN'); setn(U2,4,'GND'); setn(U2,5,'SW'); setn(U2,6,'BST')
-two(L1,'SW','+3V3'); two(C1,'VIN','GND'); two(C2,'VIN','GND'); two(C7,'BST','SW')
+two(L1,'SW','+3V3'); two(C1,'VIN','GND'); two(C2,'VIN','GND')
+for q in C7.Pads(): q.SetNet(bd.net('BST' if q.GetPosition().y<V(0,99.5).y else 'SW'))
 two(C3,'+3V3','GND'); two(C4,'+3V3','GND'); two(C5,'+3V3','GND'); two(C8,'+3V3','GND')
 for p in J9.Pads():
     m={'A4':'VBUS','B4':'VBUS','A9':'VBUS','B9':'VBUS','A6':'USB_DP','B6':'USB_DP','A7':'USB_DN','B7':'USB_DN','A5':'CC1','B5':'CC2'}
@@ -113,6 +114,18 @@ for p in range(8):
         cc=C('C%d'%(10+3*p+g),'100nF',cx-sgn*5.6,cy,0)
         bufs.append((u,cc,cx,cy))
     ports.append((J,bufs,top))
+# ---- TPD4E05U06 ESD on every ribbon port (B.Cu, next to the header pins) ----
+ESDGROUPS=[[1,3,5,7],[9,11,13,15],[17,19,21,23],[25,27,29,31],[33,35,37,39],[34,36,38]]
+def esd_place(ref,cx,cy,face_minus_y):
+    for rot in (0,90,180,270):
+        u=bd.fp('Package_SON','USON-10_2.5x1.0mm_P0.5mm',ref,'TPD4E05U06DQAR',cx,cy,rot,lc('C138714','TPD4E05U06DQAR')); u.Flip(u.GetPosition(),False)
+        p1=bd.padxy(u,1); p10=bd.padxy(u,10); p5=bd.padxy(u,5)
+        if abs(p1[1]-p10[1])>0.5 and ((p1[1]<p10[1])==face_minus_y): return u
+        b.Remove(u)
+    raise RuntimeError('esd orient')
+esds=[]
+for p,(J,bufs,top) in enumerate(ports):
+    pass
 for p,(J,bufs,top) in enumerate(ports):
     for pad in J.Pads(): pad.SetNet(bd.net('GND'))
     for g,(u,cc,cx,cy) in zip(GROUPS,bufs):
@@ -122,6 +135,18 @@ for p,(J,bufs,top) in enumerate(ports):
             setn(u,2+k,sig); on='P%d_%s'%(p,sig); setn(u,18-k,on); setn(J,portpin(sig),on)
         near1=abs(bd.padxy(cc,1)[0]-cx)<abs(bd.padxy(cc,2)[0]-cx)
         two(cc,'+3V3','GND') if near1 else two(cc,'GND','+3V3')
+    s_=1 if top else -1; oy=bd.padxy(J,1)[1]; ey=bd.padxy(J,2)[1]
+    for gi,grp in enumerate(ESDGROUPS):
+        xs=[bd.padxy(J,n)[0] for n in grp]; cx=sum(xs)/len(xs)
+        even=grp[0]%2==0
+        cy=(ey-s_*2.96) if even else (oy+s_*4.5)
+        u=esd_place('UE%d'%(10*p+gi),cx,cy,face_minus_y=(top if not even else not top))
+        io=sorted([bd.pad(u,n) for n in (1,2,4,5)],key=lambda q:q.GetPosition().x)
+        for q in (3,8): bd.setnet(u,q,'GND')
+        gx=sorted(grp,key=lambda n:bd.padxy(J,n)[0])
+        for n,q in zip(gx,io):
+            q.SetNet(bd.pad(J,n).GetNet())
+        esds.append((u,J,grp,even,s_,[(n,q) for n,q in zip(gx,io)]))
 # ---------------- structured routing ----------------
 def path(pts,net,w=0.2,layer=F,r=0.6): bd.path(pts,w,layer,net,r)
 VD,VDR=0.5,0.3
@@ -144,9 +169,10 @@ for p,(J,bufs,top) in enumerate(ports):
                 rank=n-1-i; yl=by-s*(1.3+0.6*rank); net='P%d_%s'%(p,sig)
                 if ev is None: path([(bx,by),(bx,yl),(tx,yl),(tx,ty)],net)
                 else:
-                    path([(bx,by),(bx,yl),(tx,yl)],net); bd.via(tx,yl,net,VD,VDR)
+                    yv=ty+s*0.9
+                    path([(bx,by),(bx,yl),(tx,yl),(tx,yv)],net); bd.via(tx,yv,net,VD,VDR)
                     ymid=ty-s*1.27
-                    path([(tx,yl),(tx,ymid),(ev[0],ymid),(ev[0],ev[1])],net,0.2,B,0.4)
+                    path([(tx,yv),(tx,ymid),(ev[0],ymid),(ev[0],ev[1])],net,0.2,B,0.4)
         # --- inputs: straight to spine line ---
         for k,sig in enumerate(g):
             ax,ay=bd.padxy(u,2+k)
@@ -163,6 +189,13 @@ for p,(J,bufs,top) in enumerate(ports):
         gxp=cgp.GetPosition().x/MM; path([(gxp,cyp),(gxp-s*1.0,cyp)],'GND',0.3); bd.via(gxp-s*1.0,cyp,'GND',VD,VDR)
         bcy=cy; path([p19,(p19[0],bcy)],'OE_N',0.25); bd.via(p19[0],bcy,'OE_N',VD,VDR); path([(p19[0],bcy),(p19[0],oey)],'OE_N',0.25,B)
         path([p10,(p10[0]+s*1.1,p10[1])],'GND',0.3); bd.via(p10[0]+s*1.1,p10[1],'GND',VD,VDR)
+for u,J,grp,even,s_,pairs in esds:
+    for n,q in pairs:
+        jx,jy=bd.padxy(J,n); qx,qy=q.GetPosition().x/MM,q.GetPosition().y/MM; net=q.GetNetname()
+        d=-s_ if even else s_            # direction from header pin toward ESD
+        a1,b1=(0.9,0.5) if even else (1.8,1.0)
+        path([(jx,jy),(jx,jy+d*a1),(qx,qy-d*b1),(qx,qy)],net,0.2,B,0.3)
+    g3=bd.padxy(u,3); g8=bd.padxy(u,8); path([g3,g8],'GND',0.2,B)
 def lastx(net,y,tol=0.05):
     xs=[t.GetPosition().x/MM for t in b.GetTracks() if t.GetClass()=='PCB_VIA' and t.GetNetname()==net and abs(t.GetPosition().y/MM-y)<tol]
     xs+=[e for t in b.GetTracks() if t.GetClass()!='PCB_VIA' and t.GetNetname()==net and t.GetLayer()==B for e in (t.GetStart().x/MM,t.GetEnd().x/MM) if abs(t.GetEnd().y/MM-y)<tol or abs(t.GetStart().y/MM-y)<tol]

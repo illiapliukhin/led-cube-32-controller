@@ -68,7 +68,7 @@ def write(path,comps,title,project):
     libs=sorted({c['footprint'].split(':')[0] for c in comps})
     ent=[]
     for l in libs:
-        uri='${KIPRJMOD}/cube.pretty' if l=='cube' else '${KICAD10_FOOTPRINT_DIR}/%s.pretty'%l
+        uri='${KIPRJMOD}/../../lib/cube.pretty' if l=='cube' else '${KICAD10_FOOTPRINT_DIR}/%s.pretty'%l
         ent.append(' (lib (name "%s")(type "KiCad")(uri "%s")(options "")(descr ""))'%(l,uri))
     open(os.path.join(d,'fp-lib-table'),'w').write('(fp_lib_table (version 7)\n'+'\n'.join(ent)+'\n)\n')
     return len(comps)

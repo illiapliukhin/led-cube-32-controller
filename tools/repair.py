@@ -5,7 +5,7 @@ sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 import pcbnew
 from pcbkit import Board, MM
 from router import Router
-fn=sys.argv[1]; x0,y0,x1,y1=map(float,sys.argv[2:6]); w=float(sys.argv[6]) if len(sys.argv)>6 else 0.3
+fn=sys.argv[1]; x0,y0,x1,y1=map(float,sys.argv[2:6]); w=float(sys.argv[6]) if len(sys.argv)>6 else 0.3; clr=float(sys.argv[7]) if len(sys.argv)>7 else 0.15
 KC='/workspace/.kicad10/AppDir/bin/kicad-cli'
 for it in range(4):
     _b=pcbnew.LoadBoard(fn); pcbnew.ZONE_FILLER(_b).Fill(_b.Zones()); _b.Save(fn); del _b
@@ -16,7 +16,7 @@ for it in range(4):
     bd=Board(); bd.b=pcbnew.LoadBoard(fn)
     for n in bd.b.GetNetInfo().NetsByName().values() if hasattr(bd.b.GetNetInfo(),'NetsByName') else []: pass
     bd.nets={str(k):v for k,v in bd.b.GetNetInfo().NetsByName().items()}
-    rt=Router(bd,x0,y0,x1,y1,step=0.25,w=w,clr=0.15)
+    rt=Router(bd,x0,y0,x1,y1,step=0.25,w=w,clr=clr)
     # keep footprint keepout zones blocked
     for f in bd.b.GetFootprints():
         for z in f.Zones():

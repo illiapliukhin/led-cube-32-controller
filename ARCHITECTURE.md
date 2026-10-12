@@ -12,15 +12,30 @@
 - **Стоимость LED (32³):** ≈ $5,9–11,5 тыс. (HD108/SK9822 нити $0,18–0,35/пиксель); электроника ≈ $400–600; БП ≈ $350.
 - **Вес (32³):** ≈ 60 кг висящей массы → верхняя рама из профиля 4040, нити с грузиками/нижней сеткой-растяжкой.
 
-## 1. Resolution / size options (`calc/rgb_scaling.py` → `calc/rgb_scaling_results.txt`)
-| Size | N/axis | Pitch | LEDs | Strands | Branch boards (16 str) | Main boards | fps (16-bit) | I max (A) | I ABL 25% | I avg (APL 15%) | LRS-350-5 | Mass kg | LED cost $ |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 m | **32** | 31.2 mm | 32 768 | 1 024 | 64 | **1** | 96 | 1 966 | 492 | 295 | 9 | 60 | 5.9k–11.5k |
-| 1 m | 48 | 20.8 mm | 110 592 | 2 304 | 144 | 3 | 65 | 6 636 | 1 659 | 995 | 28 | 179 | 20k–39k |
-| 1 m | 64 | 15.6 mm | 262 144 | 4 096 | 256 | 4 | 49 | 15 729 | 3 932 | 2 359 | 66 | 396 | 47k–92k |
-| 2 m | **64** | 31.2 mm | 262 144 | 4 096 | 256 | 4 | 49 | 15 729 | 3 932 | 2 359 | 66 | 478 | 47k–92k |
-| 2 m | 96 | 20.8 mm | 884 736 | 9 216 | 576 | 9 | 33 | 53 084 | 13 271 | 7 963 | 222 | 1 430 | 159k–310k |
-| 2 m | 128 | 15.6 mm | 2.1 M | 16 384 | 1 024 | 16 | 25 | 125 829 | 31 457 | 18 874 | 525 | 3 172 | 377k–734k |
+## 1. Resolution per size (`calc/size_table.py` → `calc/size_table.md`, v1.1: HD108 + 12 V bus)
+**Chosen pixel: HD108** (5050 RGB, 2-wire DATA+CLK, 16 bit per colour + 5-bit current gain per colour, 27 kHz internal PWM, ≤ 40 MHz clock, 5 V).
+Why:
+- (1) 16-bit colour removes banding in dark gradients, so shaded 3D objects look smooth.
+- (2) 27 kHz PWM means no flicker by eye or on camera.
+- (3) It is clocked, so a branch is selected by **gating CLK**, and one ESP32-S3 can drive 1024 strands on one 16-bit bus. Single-wire WS281x would need 1024 independent timed outputs.
+- (4) It is commercially available with a JST-SM 4-pin plug. Reference price: [superlightingled HD108 60 LED/m, 5 m, $65.98 ≈ $0.22/px](https://www.superlightingled.com/hd108-ic-individually-addressable-led-rgb-full-color-changing-digital-flexible-dc5v-led-strip-lights-p-4522.html) and [144 LED/m 1 m $30.98 ≈ $0.22/px](https://www.superlightingled.com/individually-addressable-dc5v-hd108-pixel-led-rgb-color-changing-led-strip-lights-p-4523.html). A custom 31.25 mm-pitch string is estimated at ≤ $0.35/px (quote pending).
+
+Fallback: HD107S (same protocol, 8-bit). Rejected: WS2812B/WS2815 (8-bit, 0.4–2 kHz PWM, no clock gating).
+
+Assumptions:
+- Data: 64 bit/pixel, 16 lanes × 13.3 MHz = 213 Mbit/s per main board.
+- Power: 60 mA/pixel full white at 5 V. Typical = APL 15 %, ABL cap 25 %. Supplied by Mean Well LRS-600-12 at 90 % load and 92 % buck efficiency.
+- Costs: main board $45, branch board $14, PSU $95.
+- Weight = pixels + 4-core 22 AWG strands + top frame.
+
+| Size | LEDs/axis | Pitch | LEDs | Strands (outputs) | Branch boards | Main boards / ribbon ports | Data rate | fps (16-bit) | Power typ (APL 15 %) | ABL 25 % cap | Abs. max | 12 V PSUs (LRS-600-12) | LED cost | Electronics+PSU | Weight |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 m³ | **32** | 31.2 mm | 32,768 | 1,024 | 64 | 1 / 8 | 213 Mbit/s | 101 | 1.5 kW | 2.5 kW | 9.8 kW | 5 | $7.2k–11.5k | $1.4k | 119 kg |
+| 1 m³ | **48** | 20.8 mm | 110,592 | 2,304 | 144 | 3 / 24 | 638 Mbit/s | 90 | 5.0 kW | 8.3 kW | 33.2 kW | 17 | $24.3k–38.7k | $3.8k | 261 kg |
+| 1 m³ | **64** | 15.6 mm | 262,144 | 4,096 | 256 | 4 / 32 | 851 Mbit/s | 51 | 11.8 kW | 19.7 kW | 78.6 kW | 40 | $57.7k–91.8k | $7.6k | 512 kg |
+| 2 m³ | **64** | 31.2 mm | 262,144 | 4,096 | 256 | 4 / 32 | 851 Mbit/s | 51 | 11.8 kW | 19.7 kW | 78.6 kW | 40 | $57.7k–91.8k | $7.6k | 790 kg |
+| 2 m³ | **96** | 20.8 mm | 884,736 | 9,216 | 576 | 9 / 72 | 1915 Mbit/s | 34 | 39.8 kW | 66.4 kW | 265.4 kW | 134 | $194.6k–309.7k | $21.2k | 1931 kg |
+| 2 m³ | **128** | 15.6 mm | 2,097,152 | 16,384 | 1024 | 16 / 128 | 3405 Mbit/s | 25 | 94.4 kW | 157.3 kW | 629.1 kW | 317 | $461.4k–734.0k | $45.2k | 3938 kg |
 
 **Recommended per size (for convincing real 3D objects):**
 - **1 m³ → 32³ (baseline), 48³ (premium).** 32 voxels per axis is enough for recognisable solid objects (a head or a car is about 20–25 voxels), and 16-bit colour gives smooth shading. 48³ noticeably improves the silhouettes, but costs 3.4× the LEDs and power.
