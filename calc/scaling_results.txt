@@ -1,0 +1,11 @@
+      cube    LEDs  scan zones    ch  drv tiles avg mA refresh Hz  PSU A Mbit/s@16b60fps lanes
+32x32x 32   32768 1/32      1  1024   64    16  0.312       1523   12.2            31.5    16
+32x32x 48   49152 1/24      2  2048  128    32  0.417       2031   22.5            47.2    32
+32x32x 64   65536 1/32      2  2048  128    32  0.312       1523   22.5            62.9    32
+48x48x 48  110592 1/24      2  4608  288    72  0.417       2031   48.1           106.2    72
+64x64x 64  262144 1/32      2  8192  512   128  0.312       1523   83.9           251.7   128
+32x32x 16   16384 1/16      1  1024   64    16  0.625       3046   12.2            15.7    16
+
+Notes: duty never worse than 1/32 because zones scan in parallel -> brightness constant;
+PSU current grows with X*Y*zones; bandwidth per lane stays ~2 Mbit/s; one RP2040 PIO SM drives 16-30 lanes (2x RP2040 for 64^3).
+Column wire: 64 LEDs x 31 mm = 2 m, R(0.8mm)=69 mOhm, 10 mA -> 0.7 mV drop: irrelevant. Limits are mechanical (buckling/sag) and layer current (X*Y*10 mA: 64x64 -> 41 A per layer FET -> split layer into 4 quadrants, 4 FETs).

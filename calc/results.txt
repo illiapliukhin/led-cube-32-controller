@@ -1,0 +1,45 @@
+LEDs=32768 columns(cathode)=1024 layers(anode)=32
+
+-- 1/32 scan: channels=1024, 16ch drivers=64, duty=0.0312
+  Ipk 10mA: avg/LED=0.312 mA, peak current per scan line=10.2 A (per layer FET 10.24 A), all-on PSU LED current=10.2 A
+  Ipk 15mA: avg/LED=0.469 mA, peak current per scan line=15.4 A (per layer FET 15.36 A), all-on PSU LED current=15.4 A
+  Ipk 20mA: avg/LED=0.625 mA, peak current per scan line=20.5 A (per layer FET 20.48 A), all-on PSU LED current=20.5 A
+
+-- 1/16 scan: channels=2048, 16ch drivers=128, duty=0.0625
+  Ipk 10mA: avg/LED=0.625 mA, peak current per scan line=20.5 A (per layer FET 10.24 A), all-on PSU LED current=20.5 A
+  Ipk 15mA: avg/LED=0.938 mA, peak current per scan line=30.7 A (per layer FET 15.36 A), all-on PSU LED current=30.7 A
+  Ipk 20mA: avg/LED=1.250 mA, peak current per scan line=41.0 A (per layer FET 20.48 A), all-on PSU LED current=41.0 A
+
+-- 1/8 scan: channels=4096, 16ch drivers=256, duty=0.1250
+  Ipk 10mA: avg/LED=1.250 mA, peak current per scan line=41.0 A (per layer FET 10.24 A), all-on PSU LED current=41.0 A
+  Ipk 15mA: avg/LED=1.875 mA, peak current per scan line=61.4 A (per layer FET 15.36 A), all-on PSU LED current=61.4 A
+  Ipk 20mA: avg/LED=2.500 mA, peak current per scan line=81.9 A (per layer FET 20.48 A), all-on PSU LED current=81.9 A
+
+-- Data bandwidth (frame data only, driver has SRAM+PWM)
+  8bit x 30 fps = 7.9 Mbit/s; per lane (16 lanes) 0.49 Mbit/s
+  8bit x 60 fps = 15.7 Mbit/s; per lane (16 lanes) 0.98 Mbit/s
+  8bit x 120 fps = 31.5 Mbit/s; per lane (16 lanes) 1.97 Mbit/s
+  16bit x 30 fps = 15.7 Mbit/s; per lane (16 lanes) 0.98 Mbit/s
+  16bit x 60 fps = 31.5 Mbit/s; per lane (16 lanes) 1.97 Mbit/s
+  16bit x 120 fps = 62.9 Mbit/s; per lane (16 lanes) 3.93 Mbit/s
+-- If MCU did BCM itself (MBI5124 style, no SRAM): 1024 ch x 8 planes x 32 lines x 960 Hz = 252 Mbit/s  -> not feasible on one ESP32-S3 SPI
+  GCLK 12.5 MHz: scan refresh=761 Hz (S-PWM splits 16-bit frame into sub-periods; visual refresh = this)
+  GCLK 20.0 MHz: scan refresh=1218 Hz (S-PWM splits 16-bit frame into sub-periods; visual refresh = this)
+  GCLK 25.0 MHz: scan refresh=1523 Hz (S-PWM splits 16-bit frame into sub-periods; visual refresh = this)
+
+-- LED rail budget @ Ipk 10 mA, layer current 10.24 A
+  Vf=3.1 driver knee=0.5 FET=0.102 feed(1.5mm2,1.2m,2 feeds)=0.141 mesh=0.15 -> need 3.99 V; use 4.5-5.0 V rail
+  rail 4.5 V: total driver dissipation all-on=10.3 W -> per chip (64) 161 mW
+  rail 5.0 V: total driver dissipation all-on=15.4 W -> per chip (64) 241 mW
+
+-- Column wire 0.8 mm Cu 1.05 m: R=35.9 mOhm, drop @10 mA = 359 uV (negligible)
+  Layer row wire 0.8 mm 1 m carries 0.32 A: worst drop (fed one end, distributed) = 5.5 mV
+
+-- Parasitics: LED Cj ~30 pF
+  column: 32 LEDs -> 960 pF; layer node: 1024 LEDs -> 30.7 nF; discharge to 0.5 V via 47 ohm pull-down tau=1.44 us
+
+-- Power budget (10 mA design)
+  LED all-on 51 W + logic ~9 W -> PSU 5V >=15 A; recommend Mean Well LRS-100-5 (18 A) or LRS-150F-5 (30 A) for 15 mA option
+
+-- Wire length ~2163 m of 0.8 mm tinned Cu = 9.7 kg; LEDs 8.2 kg (5 mm ~0.25 g)
+  solder joints ~67,584
